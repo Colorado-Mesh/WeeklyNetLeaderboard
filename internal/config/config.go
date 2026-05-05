@@ -13,25 +13,28 @@ import (
 )
 
 type Config struct {
-	AppEnv            string
-	HTTPAddr          string
-	MeshName          string
-	DiceBearStyle     string
-	UIPollSeconds     int
-	IATADefault       string
-	IATAFilters       []string
-	TrackFromDate     time.Time
-	TZ                string
-	SQLitePath        string
-	MQTTBrokerURL     string
-	MQTTTopicTemplate string
-	MQTTClientID      string
-	MQTTUsername      string
-	MQTTPassword      string
-	HashtagChannels   []string
-	PrivateChannelKeys []string
-	ReplayDelay       time.Duration
-	EnableDevSeed     bool
+	AppEnv              string
+	HTTPAddr            string
+	MeshName            string
+	DiceBearStyle       string
+	UIPollSeconds       int
+	IATADefault         string
+	IATAFilters         []string
+	TrackFromDate       time.Time
+	TZ                  string
+	SQLitePath          string
+	MQTTBrokerURL       string
+	MQTTTopicTemplate   string
+	MQTTClientID        string
+	MQTTUsername        string
+	MQTTPassword        string
+	MQTTMaxPayloadBytes int
+	IngestMaxPacketHex  int
+	IngestMaxObserver   int
+	HashtagChannels     []string
+	PrivateChannelKeys  []string
+	ReplayDelay         time.Duration
+	EnableDevSeed       bool
 }
 
 const dateOnlyFormat = "2006-01-02"
@@ -54,27 +57,42 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, fmt.Errorf("parse UI_POLL_SECONDS: %w", err)
 	}
+	mqttMaxPayloadBytes, err := strconv.Atoi(getEnv("MQTT_MAX_PAYLOAD_BYTES", "16384"))
+	if err != nil {
+		return Config{}, fmt.Errorf("parse MQTT_MAX_PAYLOAD_BYTES: %w", err)
+	}
+	ingestMaxPacketHex, err := strconv.Atoi(getEnv("INGEST_MAX_PACKET_HEX_CHARS", "8192"))
+	if err != nil {
+		return Config{}, fmt.Errorf("parse INGEST_MAX_PACKET_HEX_CHARS: %w", err)
+	}
+	ingestMaxObserver, err := strconv.Atoi(getEnv("INGEST_MAX_OBSERVER_KEY_CHARS", "64"))
+	if err != nil {
+		return Config{}, fmt.Errorf("parse INGEST_MAX_OBSERVER_KEY_CHARS: %w", err)
+	}
 
 	cfg := Config{
-		AppEnv:            getEnv("APP_ENV", "development"),
-		HTTPAddr:          getEnv("HTTP_ADDR", "127.0.0.1:8080"),
-		MeshName:          getEnv("MESH_NAME", "MeshCore"),
-		DiceBearStyle:     strings.ToLower(strings.TrimSpace(getEnv("DICEBEAR_STYLE", "adventurer"))),
-		UIPollSeconds:     uiPollSeconds,
-		IATADefault:       strings.ToUpper(getEnv("IATA_DEFAULT", "SEA")),
-		IATAFilters:       parseIATAFilters(getEnv("IATA_FILTERS", ""), strings.ToUpper(getEnv("IATA_DEFAULT", "SEA"))),
-		TrackFromDate:     trackFrom,
-		TZ:                getEnv("TZ", "America/Los_Angeles"),
-		SQLitePath:        getEnv("SQLITE_PATH", "./data/meshmonday_dev.db"),
-		MQTTBrokerURL:     getEnv("MQTT_BROKER_URL", "tcp://localhost:1883"),
-		MQTTTopicTemplate: getEnv("MQTT_TOPIC_TEMPLATE", "meshcore/+/+/packets"),
-		MQTTClientID:      getEnv("MQTT_CLIENT_ID", "meshmonday-dev"),
-		MQTTUsername:      os.Getenv("MQTT_USERNAME"),
-		MQTTPassword:      os.Getenv("MQTT_PASSWORD"),
-		HashtagChannels:   parseCSV(getEnv("HASHTAG_CHANNELS", "")),
-		PrivateChannelKeys: parseCSV(getEnv("PRIVATE_CHANNEL_KEYS", "")),
-		ReplayDelay:       time.Duration(replayDelayMs) * time.Millisecond,
-		EnableDevSeed:     parseBool(getEnv("ENABLE_DEV_SEED", "false")),
+		AppEnv:              getEnv("APP_ENV", "development"),
+		HTTPAddr:            getEnv("HTTP_ADDR", "127.0.0.1:8080"),
+		MeshName:            getEnv("MESH_NAME", "MeshCore"),
+		DiceBearStyle:       strings.ToLower(strings.TrimSpace(getEnv("DICEBEAR_STYLE", "adventurer"))),
+		UIPollSeconds:       uiPollSeconds,
+		IATADefault:         strings.ToUpper(getEnv("IATA_DEFAULT", "SEA")),
+		IATAFilters:         parseIATAFilters(getEnv("IATA_FILTERS", ""), strings.ToUpper(getEnv("IATA_DEFAULT", "SEA"))),
+		TrackFromDate:       trackFrom,
+		TZ:                  getEnv("TZ", "America/Los_Angeles"),
+		SQLitePath:          getEnv("SQLITE_PATH", "./data/meshmonday_dev.db"),
+		MQTTBrokerURL:       getEnv("MQTT_BROKER_URL", "tcp://localhost:1883"),
+		MQTTTopicTemplate:   getEnv("MQTT_TOPIC_TEMPLATE", "meshcore/+/+/packets"),
+		MQTTClientID:        getEnv("MQTT_CLIENT_ID", "meshmonday-dev"),
+		MQTTUsername:        os.Getenv("MQTT_USERNAME"),
+		MQTTPassword:        os.Getenv("MQTT_PASSWORD"),
+		MQTTMaxPayloadBytes: mqttMaxPayloadBytes,
+		IngestMaxPacketHex:  ingestMaxPacketHex,
+		IngestMaxObserver:   ingestMaxObserver,
+		HashtagChannels:     parseCSV(getEnv("HASHTAG_CHANNELS", "")),
+		PrivateChannelKeys:  parseCSV(getEnv("PRIVATE_CHANNEL_KEYS", "")),
+		ReplayDelay:         time.Duration(replayDelayMs) * time.Millisecond,
+		EnableDevSeed:       parseBool(getEnv("ENABLE_DEV_SEED", "false")),
 	}
 
 	if err := cfg.Validate(); err != nil {
@@ -100,6 +118,15 @@ func (c Config) Validate() error {
 	}
 	if strings.TrimSpace(c.MQTTTopicTemplate) == "" {
 		return errors.New("MQTT_TOPIC_TEMPLATE cannot be empty")
+	}
+	if c.MQTTMaxPayloadBytes < 256 {
+		return errors.New("MQTT_MAX_PAYLOAD_BYTES must be >= 256")
+	}
+	if c.IngestMaxPacketHex < 64 {
+		return errors.New("INGEST_MAX_PACKET_HEX_CHARS must be >= 64")
+	}
+	if c.IngestMaxObserver < 8 {
+		return errors.New("INGEST_MAX_OBSERVER_KEY_CHARS must be >= 8")
 	}
 	for _, iata := range c.IATAFilters {
 		if len(iata) < 3 || len(iata) > 4 {

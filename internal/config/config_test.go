@@ -4,7 +4,7 @@ import "testing"
 
 func TestChannelSecretKeysIncludesPublicDerivedAndPrivate(t *testing.T) {
 	cfg := Config{
-		HashtagChannels:   []string{"#bot", "seattle"},
+		HashtagChannels:    []string{"#bot", "seattle"},
 		PrivateChannelKeys: []string{"00112233445566778899aabbccddeeff"},
 	}
 	keys := cfg.ChannelSecretKeys()
@@ -26,11 +26,14 @@ func TestChannelSecretKeysIncludesPublicDerivedAndPrivate(t *testing.T) {
 
 func TestValidateDiceBearStyle(t *testing.T) {
 	cfg := Config{
-		MeshName:          "CascadiaMesh",
-		DiceBearStyle:     "rings",
-		UIPollSeconds:     15,
-		IATADefault:       "SEA",
-		MQTTTopicTemplate: "meshcore/+/+/packets",
+		MeshName:            "CascadiaMesh",
+		DiceBearStyle:       "rings",
+		UIPollSeconds:       15,
+		IATADefault:         "SEA",
+		MQTTTopicTemplate:   "meshcore/+/+/packets",
+		MQTTMaxPayloadBytes: 16384,
+		IngestMaxPacketHex:  8192,
+		IngestMaxObserver:   64,
 	}
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("expected valid config, got %v", err)
@@ -71,3 +74,30 @@ func TestParseIATAFilters(t *testing.T) {
 	}
 }
 
+func TestValidateIngestLimits(t *testing.T) {
+	cfg := Config{
+		MeshName:            "CascadiaMesh",
+		DiceBearStyle:       "fun-emoji",
+		UIPollSeconds:       15,
+		IATADefault:         "SEA",
+		MQTTTopicTemplate:   "meshcore/+/+/packets",
+		MQTTMaxPayloadBytes: 255,
+		IngestMaxPacketHex:  8192,
+		IngestMaxObserver:   64,
+	}
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected MQTT_MAX_PAYLOAD_BYTES validation to fail")
+	}
+
+	cfg.MQTTMaxPayloadBytes = 16384
+	cfg.IngestMaxPacketHex = 63
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected INGEST_MAX_PACKET_HEX_CHARS validation to fail")
+	}
+
+	cfg.IngestMaxPacketHex = 8192
+	cfg.IngestMaxObserver = 7
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected INGEST_MAX_OBSERVER_KEY_CHARS validation to fail")
+	}
+}

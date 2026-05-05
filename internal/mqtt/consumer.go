@@ -18,10 +18,11 @@ type Message struct {
 }
 
 type Consumer struct {
-	client paho.Client
-	logger *slog.Logger
-	mu     sync.Mutex
-	subs   []subscription
+	client          paho.Client
+	logger          *slog.Logger
+	maxPayloadBytes int
+	mu              sync.Mutex
+	subs            []subscription
 }
 
 type subscription struct {
@@ -29,9 +30,10 @@ type subscription struct {
 	handler func(context.Context, Message)
 }
 
-func NewConsumer(logger *slog.Logger, brokerURL, clientID, username, password string) *Consumer {
+func NewConsumer(logger *slog.Logger, brokerURL, clientID, username, password string, maxPayloadBytes int) *Consumer {
 	c := &Consumer{
-		logger: logger,
+		logger:          logger,
+		maxPayloadBytes: maxPayloadBytes,
 	}
 	opts := paho.NewClientOptions()
 	opts.AddBroker(brokerURL)
@@ -97,11 +99,11 @@ func (c *Consumer) Subscribe(topic string, handler func(context.Context, Message
 
 func (c *Consumer) subscribeWithClient(client paho.Client, sub subscription) error {
 	token := client.Subscribe(sub.topic, 1, func(_ paho.Client, msg paho.Message) {
-		sub.handler(context.Background(), Message{
-			Topic:      msg.Topic(),
-			PayloadHex: strings.TrimSpace(string(msg.Payload())),
-			ObservedAt: time.Now().UTC(),
-		})
+		message, ok := c.buildMessage(msg.Topic(), msg.Payload())
+		if !ok {
+			return
+		}
+		sub.handler(context.Background(), message)
 	})
 	token.Wait()
 	if err := token.Error(); err != nil {
@@ -109,6 +111,26 @@ func (c *Consumer) subscribeWithClient(client paho.Client, sub subscription) err
 	}
 	c.logger.Info("mqtt subscribed", "topic", sub.topic)
 	return nil
+}
+
+func (c *Consumer) buildMessage(topic string, payload []byte) (Message, bool) {
+	if len(payload) > c.maxPayloadBytes {
+		c.logger.Warn(
+			"mqtt payload dropped: too large",
+			"topic",
+			topic,
+			"payload_bytes",
+			len(payload),
+			"max_payload_bytes",
+			c.maxPayloadBytes,
+		)
+		return Message{}, false
+	}
+	return Message{
+		Topic:      topic,
+		PayloadHex: strings.TrimSpace(string(payload)),
+		ObservedAt: time.Now().UTC(),
+	}, true
 }
 
 func (c *Consumer) resubscribeAll(client paho.Client) {

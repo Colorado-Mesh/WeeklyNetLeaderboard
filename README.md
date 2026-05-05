@@ -1,6 +1,6 @@
 # MeshMonday
 
-Persistent web service for MeshCore Monday check-ins in the Cascadia Mesh region.
+Simple web service for MeshCore Monday check-ins.
 
 ## Features
 - MQTT ingestion for `meshcore/+/+/packets` (all IATA regions) with topic metadata extraction per packet
@@ -26,6 +26,11 @@ Open `http://127.0.0.1:8080`.
 - Public channel key is built in: `8b3387e9c5cdea6ac9e5edbaa115cd72`.
 - Deterministic hashtag channels: set `HASHTAG_CHANNELS` (comma-separated names, with or without `#`).
 - Private channels: set `PRIVATE_CHANNEL_KEYS` as comma-separated 16-byte hex keys.
+
+### Ingest safety limits
+- `MQTT_MAX_PAYLOAD_BYTES` caps raw MQTT message size before processing (default `16384`).
+- `INGEST_MAX_PACKET_HEX_CHARS` caps packet/envelope raw hex length accepted by ingest (default `8192`).
+- `INGEST_MAX_OBSERVER_KEY_CHARS` caps observer key length from envelope/topic (default `64`).
 
 ### UI settings
 - DiceBear avatar style: set `DICEBEAR_STYLE` to any DiceBear style slug (e.g. `rings`, `adventurer`, `pixel-art`, `bottts`).
@@ -53,6 +58,12 @@ Open `http://127.0.0.1:8080`.
 ## Docker for production
 1. Create `.env` with production values.
 2. Run `docker compose up -d --build`
+
+### Public deployment recommendations
+- Run behind TLS termination (reverse proxy or load balancer).
+- Keep default server timeouts and header size limits in place.
+- Avoid exposing internal errors to clients (API returns generic `internal_error` on failures).
+- Use MQTT credentials with publish ACLs scoped to expected topics.
 
 ## Backups
 Backup helper: `scripts/backup_sqlite.sh`.

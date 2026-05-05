@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"log/slog"
@@ -25,6 +26,8 @@ type Server struct {
 	logger    *slog.Logger
 	templates *template.Template
 }
+
+const weekDateLayout = "2006-01-02"
 
 func NewServer(cfg config.Config, store *storage.SQLiteStore, logger *slog.Logger) (*Server, error) {
 	tmpl, err := template.New("").Funcs(template.FuncMap{
@@ -89,91 +92,109 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/api/leaderboard", s.handleAPILeaderboard)
 	mux.HandleFunc("/leaderboard", s.handleLeaderboardPage)
 	mux.HandleFunc("/", s.handleMondayPage)
-	return loggingMiddleware(mux, s.logger)
+	return loggingMiddleware(securityHeadersMiddleware(mux), s.logger)
 }
 
-func (s *Server) handleHealthz(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
+	if !allowReadMethod(w, r) {
+		return
+	}
 	jsonResponse(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
-func (s *Server) handleReadyz(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
+	if !allowReadMethod(w, r) {
+		return
+	}
 	jsonResponse(w, http.StatusOK, map[string]string{"status": "ready"})
 }
 
 func (s *Server) handleMondayPage(w http.ResponseWriter, r *http.Request) {
-	weekStart := checkins.WeekStartMonday(time.Now(), s.cfg.TZ)
-	if raw := strings.TrimSpace(r.URL.Query().Get("week")); raw != "" {
-		if parsed, err := time.Parse("2006-01-02", raw); err == nil {
-			weekStart = parsed
-		}
+	if !allowReadMethod(w, r) {
+		return
+	}
+	weekStart, err := parseWeekStart(r, s.cfg.TZ)
+	if err != nil {
+		http.Error(w, "Invalid week parameter.", http.StatusBadRequest)
+		return
 	}
 	items, err := s.store.ListCheckinsByWeek(r.Context(), s.cfg.IATAFilters, weekStart)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		s.logger.Error("list checkins by week failed", "error", err.Error(), "week_start", weekStart.Format(weekDateLayout))
+		http.Error(w, "Internal server error.", http.StatusInternalServerError)
 		return
 	}
 	data := struct {
-		WeekStart string
-		MeshName  string
+		WeekStart      string
+		MeshName       string
 		ListenChannels []string
-		DiceBearStyle string
-		UIPollSeconds int
-		IATA      string
-		Count     int
-		Checkins  []models.Checkin
+		DiceBearStyle  string
+		UIPollSeconds  int
+		IATA           string
+		Count          int
+		Checkins       []models.Checkin
 	}{
-		WeekStart: weekStart.Format("2006-01-02"),
-		MeshName:  s.cfg.MeshName,
+		WeekStart:      weekStart.Format(weekDateLayout),
+		MeshName:       s.cfg.MeshName,
 		ListenChannels: configuredHashtagChannels(s.cfg.HashtagChannels),
-		DiceBearStyle: s.cfg.DiceBearStyle,
-		UIPollSeconds: s.cfg.UIPollSeconds,
-		IATA:      s.cfg.IATAFilterLabel(),
-		Count:     len(items),
-		Checkins:  items,
+		DiceBearStyle:  s.cfg.DiceBearStyle,
+		UIPollSeconds:  s.cfg.UIPollSeconds,
+		IATA:           s.cfg.IATAFilterLabel(),
+		Count:          len(items),
+		Checkins:       items,
 	}
 	if err := s.templates.ExecuteTemplate(w, "index.html", data); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		s.logger.Error("render monday page failed", "error", err.Error())
+		http.Error(w, "Internal server error.", http.StatusInternalServerError)
 	}
 }
 
 func (s *Server) handleLeaderboardPage(w http.ResponseWriter, r *http.Request) {
+	if !allowReadMethod(w, r) {
+		return
+	}
 	entries, err := s.computeLeaderboard(r.Context())
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		s.logger.Error("compute leaderboard failed", "error", err.Error())
+		http.Error(w, "Internal server error.", http.StatusInternalServerError)
 		return
 	}
 	data := struct {
-		Entries     []models.LeaderboardEntry
-		MeshName    string
-		TrackedFrom string
+		Entries       []models.LeaderboardEntry
+		MeshName      string
+		TrackedFrom   string
 		DiceBearStyle string
 		UIPollSeconds int
 	}{
-		Entries:     entries,
-		MeshName:    s.cfg.MeshName,
-		TrackedFrom: s.cfg.TrackFromDate.Format("2006-01-02"),
+		Entries:       entries,
+		MeshName:      s.cfg.MeshName,
+		TrackedFrom:   s.cfg.TrackFromDate.Format(weekDateLayout),
 		DiceBearStyle: s.cfg.DiceBearStyle,
 		UIPollSeconds: s.cfg.UIPollSeconds,
 	}
 	if err := s.templates.ExecuteTemplate(w, "leaderboard.html", data); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		s.logger.Error("render leaderboard page failed", "error", err.Error())
+		http.Error(w, "Internal server error.", http.StatusInternalServerError)
 	}
 }
 
 func (s *Server) handleAPIWeekCheckins(w http.ResponseWriter, r *http.Request) {
-	weekStart := checkins.WeekStartMonday(time.Now(), s.cfg.TZ)
-	if raw := strings.TrimSpace(r.URL.Query().Get("week")); raw != "" {
-		if parsed, err := time.Parse("2006-01-02", raw); err == nil {
-			weekStart = parsed
-		}
+	if !allowReadMethod(w, r) {
+		return
+	}
+	weekStart, err := parseWeekStart(r, s.cfg.TZ)
+	if err != nil {
+		jsonResponse(w, http.StatusBadRequest, map[string]string{"error": "invalid_week"})
+		return
 	}
 	items, err := s.store.ListCheckinsByWeek(r.Context(), s.cfg.IATAFilters, weekStart)
 	if err != nil {
-		jsonResponse(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		s.logger.Error("api list checkins by week failed", "error", err.Error(), "week_start", weekStart.Format(weekDateLayout))
+		jsonResponse(w, http.StatusInternalServerError, map[string]string{"error": "internal_error"})
 		return
 	}
 	jsonResponse(w, http.StatusOK, map[string]any{
-		"week_start": weekStart.Format("2006-01-02"),
+		"week_start": weekStart.Format(weekDateLayout),
 		"iata":       s.cfg.IATAFilterLabel(),
 		"count":      len(items),
 		"checkins":   items,
@@ -181,13 +202,17 @@ func (s *Server) handleAPIWeekCheckins(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAPILeaderboard(w http.ResponseWriter, r *http.Request) {
+	if !allowReadMethod(w, r) {
+		return
+	}
 	entries, err := s.computeLeaderboard(r.Context())
 	if err != nil {
-		jsonResponse(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		s.logger.Error("api compute leaderboard failed", "error", err.Error())
+		jsonResponse(w, http.StatusInternalServerError, map[string]string{"error": "internal_error"})
 		return
 	}
 	jsonResponse(w, http.StatusOK, map[string]any{
-		"tracked_from": s.cfg.TrackFromDate.Format("2006-01-02"),
+		"tracked_from": s.cfg.TrackFromDate.Format(weekDateLayout),
 		"entries":      entries,
 	})
 }
@@ -210,6 +235,37 @@ func loggingMiddleware(next http.Handler, logger *slog.Logger) http.Handler {
 		next.ServeHTTP(w, r)
 		logger.Info("http_request", "path", r.URL.Path, "method", r.Method, "duration_ms", time.Since(start).Milliseconds())
 	})
+}
+
+func securityHeadersMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		next.ServeHTTP(w, r)
+	})
+}
+
+func allowReadMethod(w http.ResponseWriter, r *http.Request) bool {
+	if r.Method == http.MethodGet || r.Method == http.MethodHead {
+		return true
+	}
+	w.Header().Set("Allow", "GET, HEAD")
+	http.Error(w, "Method not allowed.", http.StatusMethodNotAllowed)
+	return false
+}
+
+func parseWeekStart(r *http.Request, tz string) (time.Time, error) {
+	weekStart := checkins.WeekStartMonday(time.Now(), tz)
+	raw := strings.TrimSpace(r.URL.Query().Get("week"))
+	if raw == "" {
+		return weekStart, nil
+	}
+	parsed, err := time.Parse(weekDateLayout, raw)
+	if err != nil {
+		return time.Time{}, errors.New("invalid week")
+	}
+	return parsed, nil
 }
 
 func jsonResponse(w http.ResponseWriter, status int, body any) {

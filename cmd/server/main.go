@@ -17,6 +17,14 @@ import (
 	"meshmonday/internal/web"
 )
 
+const (
+	readHeaderTimeout = 5 * time.Second
+	readTimeout       = 15 * time.Second
+	writeTimeout      = 20 * time.Second
+	idleTimeout       = 60 * time.Second
+	maxHeaderBytes    = 1 << 20
+)
+
 func main() {
 	_ = config.LoadEnvFile(".env.local")
 	logger := logging.NewJSONLogger()
@@ -44,14 +52,17 @@ func main() {
 		os.Exit(1)
 	}
 
-	httpServer := &http.Server{
-		Addr:              cfg.HTTPAddr,
-		Handler:           webServer.Routes(),
-		ReadHeaderTimeout: 5 * time.Second,
-	}
+	httpServer := newHTTPServer(cfg.HTTPAddr, webServer.Routes())
 
 	ingestService := ingest.NewService(cfg, store, logger)
-	mqttConsumer := mqtt.NewConsumer(logger, cfg.MQTTBrokerURL, cfg.MQTTClientID, cfg.MQTTUsername, cfg.MQTTPassword)
+	mqttConsumer := mqtt.NewConsumer(
+		logger,
+		cfg.MQTTBrokerURL,
+		cfg.MQTTClientID,
+		cfg.MQTTUsername,
+		cfg.MQTTPassword,
+		cfg.MQTTMaxPayloadBytes,
+	)
 	topic := cfg.TopicForIATA(cfg.IATADefault)
 	if err := mqttConsumer.Subscribe(topic, func(ctx context.Context, msg mqtt.Message) {
 		ingestService.HandleMessage(ctx, msg.Topic, msg.PayloadHex, msg.ObservedAt)
@@ -71,6 +82,18 @@ func main() {
 	}()
 
 	waitForShutdown(logger, httpServer)
+}
+
+func newHTTPServer(addr string, handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: readHeaderTimeout,
+		ReadTimeout:       readTimeout,
+		WriteTimeout:      writeTimeout,
+		IdleTimeout:       idleTimeout,
+		MaxHeaderBytes:    maxHeaderBytes,
+	}
 }
 
 func connectMQTTWithRetry(logger *slog.Logger, consumer *mqtt.Consumer) {

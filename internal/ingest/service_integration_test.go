@@ -17,8 +17,8 @@ import (
 
 func TestIntegrationIngestDedupeAndMondayCheckin(t *testing.T) {
 	dbPath := "./test_ingest.db"
-	_ = os.Remove(dbPath)
-	defer os.Remove(dbPath)
+	removeSQLiteFiles(dbPath)
+	defer removeSQLiteFiles(dbPath)
 
 	store, err := storage.OpenSQLite(dbPath)
 	if err != nil {
@@ -54,8 +54,8 @@ func TestIntegrationIngestDedupeAndMondayCheckin(t *testing.T) {
 
 func TestIntegrationObserverAggregationFromEnvelopeOrigin(t *testing.T) {
 	dbPath := "./test_ingest_observers.db"
-	_ = os.Remove(dbPath)
-	defer os.Remove(dbPath)
+	removeSQLiteFiles(dbPath)
+	defer removeSQLiteFiles(dbPath)
 
 	store, err := storage.OpenSQLite(dbPath)
 	if err != nil {
@@ -99,8 +99,8 @@ func TestIntegrationObserverAggregationFromEnvelopeOrigin(t *testing.T) {
 
 func TestIntegrationUsernameDedupWithinWeek(t *testing.T) {
 	dbPath := "./test_ingest_username_dedupe.db"
-	_ = os.Remove(dbPath)
-	defer os.Remove(dbPath)
+	removeSQLiteFiles(dbPath)
+	defer removeSQLiteFiles(dbPath)
 
 	store, err := storage.OpenSQLite(dbPath)
 	if err != nil {
@@ -135,8 +135,8 @@ func TestIntegrationUsernameDedupWithinWeek(t *testing.T) {
 
 func TestIntegrationObserverBadgeAggregatesAcrossUserPackets(t *testing.T) {
 	dbPath := "./test_ingest_observer_aggregate.db"
-	_ = os.Remove(dbPath)
-	defer os.Remove(dbPath)
+	removeSQLiteFiles(dbPath)
+	defer removeSQLiteFiles(dbPath)
 
 	store, err := storage.OpenSQLite(dbPath)
 	if err != nil {
@@ -177,8 +177,8 @@ func TestIntegrationObserverBadgeAggregatesAcrossUserPackets(t *testing.T) {
 
 func TestIntegrationRestoreCheckinPacketsFromRaw(t *testing.T) {
 	dbPath := "./test_restore_checkin_packets.db"
-	_ = os.Remove(dbPath)
-	defer os.Remove(dbPath)
+	removeSQLiteFiles(dbPath)
+	defer removeSQLiteFiles(dbPath)
 
 	store, err := storage.OpenSQLite(dbPath)
 	if err != nil {
@@ -245,4 +245,10 @@ func TestIntegrationRestoreCheckinPacketsFromRaw(t *testing.T) {
 		t.Fatalf("expected observer aggregation restored to 2, got %d", rows[0].ObserverCount)
 	}
 
+}
+
+func removeSQLiteFiles(dbPath string) {
+	_ = os.Remove(dbPath)
+	_ = os.Remove(dbPath + "-wal")
+	_ = os.Remove(dbPath + "-shm")
 }

@@ -31,6 +31,13 @@ type RestoreCheckinPacketsResult struct {
 	InsertLinkErrors int
 }
 
+const (
+	busyRetryAttempts        = 3
+	busyRetryDelay           = 40 * time.Millisecond
+	defaultMaxPacketHexChars = 8192
+	defaultMaxObserverChars  = 64
+)
+
 func NewService(cfg config.Config, store *storage.SQLiteStore, logger *slog.Logger) *Service {
 	return &Service{
 		cfg:         cfg,
@@ -46,7 +53,12 @@ func (s *Service) HandleMessage(ctx context.Context, topic, payloadHex string, o
 		s.logger.Warn("invalid topic shape", "topic", topic)
 		return
 	}
-	packetHex, observerKey, ok := decodeIncomingEnvelope(payloadHex, deviceKey)
+	packetHex, observerKey, ok := decodeIncomingEnvelope(
+		payloadHex,
+		deviceKey,
+		s.maxPacketHexChars(),
+		s.maxObserverChars(),
+	)
 	if !ok {
 		s.logger.Warn("empty packet body", "topic", topic)
 		return
@@ -59,25 +71,34 @@ func (s *Service) HandleMessage(ctx context.Context, topic, payloadHex string, o
 	}
 	packetHash := meshcore.HashPacket(packetHex)
 
-	inserted, err := s.store.InsertRawPacket(ctx, models.RawPacket{
-		PacketHash:      packetHash,
-		Topic:           topic,
-		IATA:            iata,
-		DevicePublicKey: deviceKey,
-		PayloadHex:      packetHex,
-		PayloadType:     packet.PayloadType,
-		PayloadTypeName: packet.PayloadTypeName,
-		RouteType:       packet.RouteType,
-		RouteTypeName:   packet.RouteTypeName,
-		PathLen:         packet.PathLen,
-		ObservedAt:      observedAt.UTC(),
-		ReceivedAt:      time.Now().UTC(),
+	var inserted bool
+	err = withBusyRetry(ctx, func() error {
+		var innerErr error
+		inserted, innerErr = s.store.InsertRawPacket(ctx, models.RawPacket{
+			PacketHash:      packetHash,
+			Topic:           topic,
+			IATA:            iata,
+			DevicePublicKey: deviceKey,
+			PayloadHex:      packetHex,
+			PayloadType:     packet.PayloadType,
+			PayloadTypeName: packet.PayloadTypeName,
+			RouteType:       packet.RouteType,
+			RouteTypeName:   packet.RouteTypeName,
+			PathLen:         packet.PathLen,
+			ObservedAt:      observedAt.UTC(),
+			ReceivedAt:      time.Now().UTC(),
+		})
+		return innerErr
 	})
 	if err != nil {
 		s.logger.Error("insert raw packet failed", "error", err.Error())
 		return
 	}
-	if _, err := s.store.InsertPacketObservation(ctx, packetHash, observerKey, observedAt.UTC()); err != nil {
+	err = withBusyRetry(ctx, func() error {
+		_, innerErr := s.store.InsertPacketObservation(ctx, packetHash, observerKey, observedAt.UTC())
+		return innerErr
+	})
+	if err != nil {
 		s.logger.Error("insert packet observation failed", "error", err.Error())
 	}
 	if !inserted {
@@ -95,18 +116,25 @@ func (s *Service) HandleMessage(ctx context.Context, topic, payloadHex string, o
 
 	weekStart := checkins.WeekStartMonday(observedAt, s.cfg.TZ)
 	checkinDate := observedAt.In(weekStart.Location())
-	if _, err := s.store.InsertCheckinPacket(ctx, weekStart, candidate.Username, packetHash, time.Now().UTC()); err != nil {
+	err = withBusyRetry(ctx, func() error {
+		_, innerErr := s.store.InsertCheckinPacket(ctx, weekStart, candidate.Username, packetHash, time.Now().UTC())
+		return innerErr
+	})
+	if err != nil {
 		s.logger.Error("insert checkin packet link failed", "error", err.Error())
 	}
-	_, err = s.store.InsertCheckin(ctx, models.Checkin{
-		PacketHash:  packetHash,
-		Username:    candidate.Username,
-		DisplayName: candidate.DisplayName,
-		Message:     candidate.Message,
-		IATA:        iata,
-		CheckinDate: checkinDate,
-		WeekStart:   weekStart,
-		CreatedAt:   time.Now().UTC(),
+	err = withBusyRetry(ctx, func() error {
+		_, innerErr := s.store.InsertCheckin(ctx, models.Checkin{
+			PacketHash:  packetHash,
+			Username:    candidate.Username,
+			DisplayName: candidate.DisplayName,
+			Message:     candidate.Message,
+			IATA:        iata,
+			CheckinDate: checkinDate,
+			WeekStart:   weekStart,
+			CreatedAt:   time.Now().UTC(),
+		})
+		return innerErr
 	})
 	if err != nil {
 		s.logger.Error("insert checkin failed", "error", err.Error())
@@ -166,31 +194,87 @@ func parseTopic(topic string) (iata, deviceKey string, ok bool) {
 	return strings.ToUpper(parts[1]), parts[2], true
 }
 
+func (s *Service) maxPacketHexChars() int {
+	if s.cfg.IngestMaxPacketHex > 0 {
+		return s.cfg.IngestMaxPacketHex
+	}
+	return defaultMaxPacketHexChars
+}
+
+func (s *Service) maxObserverChars() int {
+	if s.cfg.IngestMaxObserver > 0 {
+		return s.cfg.IngestMaxObserver
+	}
+	return defaultMaxObserverChars
+}
+
+func withBusyRetry(ctx context.Context, fn func() error) error {
+	var lastErr error
+	for attempt := 0; attempt <= busyRetryAttempts; attempt++ {
+		err := fn()
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+		if !isSQLiteBusyError(err) || attempt == busyRetryAttempts {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(busyRetryDelay):
+		}
+	}
+	return lastErr
+}
+
+func isSQLiteBusyError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToUpper(err.Error())
+	return strings.Contains(msg, "SQLITE_BUSY") || strings.Contains(msg, "DATABASE IS LOCKED")
+}
+
 type packetEnvelope struct {
 	Origin string `json:"origin"`
 	Raw    string `json:"raw"`
 }
 
-func decodeIncomingEnvelope(payload, fallbackObserver string) (packetHex, observer string, ok bool) {
+func decodeIncomingEnvelope(payload, fallbackObserver string, maxPacketHexChars int, maxObserverChars int) (packetHex, observer string, ok bool) {
 	trimmed := strings.TrimSpace(payload)
 	if trimmed == "" {
+		return "", "", false
+	}
+	if len(trimmed) > maxPacketHexChars {
 		return "", "", false
 	}
 
 	observer = fallbackObserver
 	if strings.HasPrefix(trimmed, "{") {
-		var env packetEnvelope
-		if err := json.Unmarshal([]byte(trimmed), &env); err == nil {
-			if raw := strings.TrimSpace(env.Raw); raw != "" {
-				packetHex = raw
-			}
-			if name := strings.TrimSpace(env.Origin); name != "" {
-				observer = name
-			}
+		if !json.Valid([]byte(trimmed)) {
+			return "", "", false
 		}
+		var env packetEnvelope
+		if err := json.Unmarshal([]byte(trimmed), &env); err != nil {
+			return "", "", false
+		}
+		raw := strings.TrimSpace(env.Raw)
+		if raw == "" || len(raw) > maxPacketHexChars {
+			return "", "", false
+		}
+		packetHex = raw
+		if name := strings.TrimSpace(env.Origin); name != "" {
+			if len(name) > maxObserverChars {
+				return "", "", false
+			}
+			observer = name
+		}
+		return packetHex, observer, true
 	}
-	if packetHex == "" {
-		packetHex = trimmed
+	if len(observer) > maxObserverChars {
+		observer = observer[:maxObserverChars]
 	}
+	packetHex = trimmed
 	return packetHex, observer, true
 }
