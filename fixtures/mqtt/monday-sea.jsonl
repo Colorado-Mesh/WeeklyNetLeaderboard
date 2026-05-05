@@ -1,0 +1,4 @@
+{"topic":"meshcore/SEA/device_alpha/packets","payload_hex":"110041766572793a204d6f6e64617920636865636b696e","observed_at":"2026-05-04T16:00:00Z","meta":{"username":"avery","set":"happy-path"}}
+{"topic":"meshcore/SEA/device_bravo/packets","payload_hex":"1100426c616b653a2048656c6c6f204d657368436f7265","observed_at":"2026-05-04T16:03:00Z","meta":{"username":"blake","set":"happy-path"}}
+{"topic":"meshcore/SEA/device_charlie/packets","payload_hex":"110043617365793a20436865636b696e2066726f6d20534541","observed_at":"2026-05-04T16:06:00Z","meta":{"username":"casey","set":"happy-path"}}
+{"topic":"meshcore/SEA/device_delta/packets","payload_hex":"1100447265773a20486f706520796f75206172652077656c6c","observed_at":"2026-05-04T16:09:00Z","meta":{"username":"drew","set":"happy-path"}}

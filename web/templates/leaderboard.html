@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MeshMonday Leaderboard</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body data-poll-seconds="{{.UIPollSeconds}}">
+  <main class="page">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">{{.MeshName}}</p>
+        <h1>MeshMonday Leaderboard</h1>
+        <p class="subtitle">Tracking from {{.TrackedFrom}}</p>
+      </div>
+      <nav class="nav">
+        <a href="/">Check-ins</a>
+        <a href="/leaderboard">Leaderboard</a>
+      </nav>
+    </header>
+
+    <section class="board">
+      {{range .Entries}}
+      <article class="board-row">
+        <div class="board-user">
+          <img src="https://api.dicebear.com/9.x/{{$.DiceBearStyle}}/svg?seed={{.Username}}" alt="{{.DisplayName}} avatar" loading="lazy">
+          <div>
+            <h2>{{.DisplayName}}</h2>
+          </div>
+        </div>
+        <div class="rings">
+          <div class="ring-wrap">
+            <div class="ring most" style="--ring-value: {{.MostCheckins}};">
+              <span>{{.MostCheckins}}</span>
+            </div>
+            <small>Most Check-ins</small>
+          </div>
+          <div class="ring-wrap">
+            <div class="ring streak" style="--ring-value: {{.LongestStreak}};">
+              <span>{{.LongestStreak}}</span>
+            </div>
+            <small>Longest Streak<br>{{.StreakStartDate}}</small>
+          </div>
+        </div>
+      </article>
+      {{else}}
+      <p class="empty">No leaderboard data yet.</p>
+      {{end}}
+    </section>
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+</html>

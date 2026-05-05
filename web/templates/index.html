@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MeshMonday Check-ins</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body data-poll-seconds="{{.UIPollSeconds}}">
+  <main class="page">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">{{.MeshName}}</p>
+        <h1>MeshMonday Check-ins</h1>
+        <p class="subtitle">Week of {{.WeekStart}} · {{.Count}} check-ins</p>
+      </div>
+      <nav class="nav">
+        <a href="/">Check-ins</a>
+        <a href="/leaderboard">Leaderboard</a>
+      </nav>
+    </header>
+
+    <section class="tile-grid">
+      {{range .Checkins}}
+      <article class="tile" data-username="{{.Username}}">
+        <span class="observer-badge" data-tooltip="{{observerTooltip .ObserverCount .ObserverNames}}" tabindex="0" aria-label="Observers">
+          {{.ObserverCount}}
+        </span>
+        <img src="https://api.dicebear.com/9.x/{{$.DiceBearStyle}}/svg?seed={{.Username}}" alt="{{.DisplayName}} avatar" loading="lazy">
+        <h2>{{.DisplayName}}</h2>
+      </article>
+      {{else}}
+      <p class="empty">No Monday check-ins yet for this week. To appear here, send a message in the Public channel{{if .ListenChannels}} or in {{if eq (len .ListenChannels) 1}}the {{index .ListenChannels 0}} channel{{else}}one of these channels: {{range $i, $ch := .ListenChannels}}{{if $i}}, {{end}}{{$ch}}{{end}}{{end}}{{end}} that includes <strong>#meshmonday</strong> on Monday.</p>
+      {{end}}
+    </section>
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+</html>
