@@ -59,6 +59,13 @@ Open `http://127.0.0.1:8080`.
 1. Create `.env` with production values.
 2. Run `docker compose up -d --build`
 
+### Image automation
+- GitHub Actions now builds Docker images automatically:
+  - Pull requests to `main`: build-only validation (no push).
+  - Pushes to `main` and version tags (`v*`): build and push to GHCR.
+- Image builds are multi-arch for `linux/amd64` and `linux/arm64`.
+- Published image path: `ghcr.io/agessaman/meshmonday`
+
 ### Public deployment recommendations
 - Run behind TLS termination (reverse proxy or load balancer).
 - Keep default server timeouts and header size limits in place.
