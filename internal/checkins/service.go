@@ -14,7 +14,7 @@ import (
 )
 
 var (
-	wordPattern         = regexp.MustCompile(`[A-Za-z0-9_]+`)
+	wordPattern = regexp.MustCompile(`[A-Za-z0-9_]+`)
 )
 
 const payloadTypeGroupText = 0x05
@@ -25,12 +25,12 @@ type Candidate struct {
 	Message     string
 }
 
-func ExtractFromPacket(payloadType int, payloadHex string, channelKeys []string) (Candidate, bool) {
+func ExtractFromPacket(payloadType int, payloadHex string, channelKeys []string, hashtag string) (Candidate, bool) {
 	if payloadType == payloadTypeGroupText {
 		if sender, message, ok := decryptGroupTextPayload(payloadHex, channelKeys); ok {
 			message = strings.TrimSpace(message)
 			if sender != "" {
-				if !hasMeshMondayTag(message) {
+				if !hasCheckInHashtag(message, hashtag) {
 					return Candidate{}, false
 				}
 				return Candidate{
@@ -40,14 +40,14 @@ func ExtractFromPacket(payloadType int, payloadHex string, channelKeys []string)
 				}, true
 			}
 			if full := strings.TrimSpace(message); full != "" {
-				return parseCandidateFromText(full)
+				return parseCandidateFromText(full, hashtag)
 			}
 		}
 	}
-	return ExtractFromPayload(payloadHex)
+	return ExtractFromPayload(payloadHex, hashtag)
 }
 
-func ExtractFromPayload(payloadHex string) (Candidate, bool) {
+func ExtractFromPayload(payloadHex string, hashtag string) (Candidate, bool) {
 	raw, err := hex.DecodeString(strings.TrimSpace(payloadHex))
 	if err != nil {
 		return Candidate{}, false
@@ -58,7 +58,7 @@ func ExtractFromPayload(payloadHex string) (Candidate, bool) {
 	if err := json.Unmarshal(raw, &jsonBody); err == nil {
 		name := stringValue(jsonBody, "username", "sender", "name")
 		message := stringValue(jsonBody, "message", "text", "body")
-		if name != "" && message != "" && hasMeshMondayTag(message) {
+		if name != "" && message != "" && hasCheckInHashtag(message, hashtag) {
 			u := normalizeUsername(name)
 			return Candidate{
 				Username:    u,
@@ -72,24 +72,24 @@ func ExtractFromPayload(payloadHex string) (Candidate, bool) {
 	if text == "" {
 		return Candidate{}, false
 	}
-	return parseCandidateFromText(text)
+	return parseCandidateFromText(text, hashtag)
 }
 
-func IsMondayInTZ(t time.Time, tz string) bool {
+func IsWeekdayInTZ(t time.Time, tz string, target time.Weekday) bool {
 	loc, err := time.LoadLocation(tz)
 	if err != nil {
 		loc = time.UTC
 	}
-	return t.In(loc).Weekday() == time.Monday
+	return t.In(loc).Weekday() == target
 }
 
-func WeekStartMonday(t time.Time, tz string) time.Time {
+func WeekStartForWeekday(t time.Time, tz string, target time.Weekday) time.Time {
 	loc, err := time.LoadLocation(tz)
 	if err != nil {
 		loc = time.UTC
 	}
 	local := t.In(loc)
-	delta := (int(local.Weekday()) + 6) % 7
+	delta := (int(local.Weekday()) - int(target) + 7) % 7
 	dayStart := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, loc)
 	return dayStart.AddDate(0, 0, -delta)
 }
@@ -127,14 +127,14 @@ func stringValue(body map[string]any, keys ...string) string {
 	return ""
 }
 
-func hasMeshMondayTag(message string) bool {
-	return strings.Contains(strings.ToLower(message), "#meshmonday")
+func hasCheckInHashtag(message string, hashtag string) bool {
+	return strings.Contains(strings.ToLower(message), strings.ToLower(hashtag))
 }
 
-func parseCandidateFromText(text string) (Candidate, bool) {
+func parseCandidateFromText(text string, hashtag string) (Candidate, bool) {
 	display, msg := parseSenderAndMessage(text)
 	if display != "" {
-		if !hasMeshMondayTag(msg) {
+		if !hasCheckInHashtag(msg, hashtag) {
 			return Candidate{}, false
 		}
 		return Candidate{

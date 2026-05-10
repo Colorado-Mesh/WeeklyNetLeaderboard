@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>MeshMonday Check-ins</title>
+  <title>WeeklyNet Check-ins</title>
   <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body data-poll-seconds="{{.UIPollSeconds}}">
@@ -11,7 +11,7 @@
     <header class="hero">
       <div>
         <p class="eyebrow">{{.MeshName}}</p>
-        <h1>MeshMonday Check-ins</h1>
+        <h1>WeeklyNet Check-ins</h1>
         <p class="subtitle">Week of {{.WeekStart}} · {{.Count}} check-ins</p>
       </div>
       <nav class="nav">
@@ -30,7 +30,7 @@
         <h2>{{.DisplayName}}</h2>
       </article>
       {{else}}
-      <p class="empty">No Monday check-ins yet for this week. To appear here, send a message in the Public channel{{if .ListenChannels}} or in {{if eq (len .ListenChannels) 1}}the {{index .ListenChannels 0}} channel{{else}}one of these channels: {{range $i, $ch := .ListenChannels}}{{if $i}}, {{end}}{{$ch}}{{end}}{{end}}{{end}} that includes <strong>#meshmonday</strong> on Monday.</p>
+      <p class="empty">No {{.WeekDayName}} check-ins yet for this week. To appear here, send a message in the Public channel{{if .ListenChannels}} or in {{if eq (len .ListenChannels) 1}}the {{index .ListenChannels 0}} channel{{else}}one of these channels: {{range $i, $ch := .ListenChannels}}{{if $i}}, {{end}}{{$ch}}{{end}}{{end}}{{end}} that includes <strong>{{.CheckInHashtag}}</strong> on {{.WeekDayName}}.</p>
       {{end}}
     </section>
   </main>

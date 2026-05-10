@@ -21,7 +21,7 @@ dev: setup
 	@set -a; source $(ENV_FILE); set +a; $$(command -v air || echo "$$(go env GOPATH)/bin/air") -c .air.toml
 
 build:
-	@go build -o ./bin/meshmonday ./cmd/server
+	@go build -o ./bin/weeklynet ./cmd/server
 
 test:
 	@go test ./...

@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"meshmonday/internal/config"
-	"meshmonday/internal/storage"
+	"weeklynet/internal/config"
+	"weeklynet/internal/storage"
 )
 
 func newTestServer(t *testing.T) (*Server, *storage.SQLiteStore) {
@@ -40,6 +40,8 @@ func newTestServer(t *testing.T) (*Server, *storage.SQLiteStore) {
 		TZ:                "America/Los_Angeles",
 		TrackFromDate:     time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC),
 		MQTTTopicTemplate: "meshcore/+/+/packets",
+		DayOfWeek:         time.Monday,
+		CheckInHashtag:    "#meshmonday",
 	}
 	srv, err := NewServer(cfg, store, slog.Default())
 	if err != nil {

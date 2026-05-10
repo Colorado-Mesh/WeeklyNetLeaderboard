@@ -9,12 +9,12 @@ import (
 	"syscall"
 	"time"
 
-	"meshmonday/internal/config"
-	"meshmonday/internal/ingest"
-	"meshmonday/internal/logging"
-	"meshmonday/internal/mqtt"
-	"meshmonday/internal/storage"
-	"meshmonday/internal/web"
+	"weeklynet/internal/config"
+	"weeklynet/internal/ingest"
+	"weeklynet/internal/logging"
+	"weeklynet/internal/mqtt"
+	"weeklynet/internal/storage"
+	"weeklynet/internal/web"
 )
 
 const (

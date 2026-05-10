@@ -6,7 +6,7 @@ import (
 )
 
 func TestExtractFromPayload(t *testing.T) {
-	c, ok := ExtractFromPayload("41766572793a2068656c6c6f206d65736820236d6573686d6f6e646179")
+	c, ok := ExtractFromPayload("41766572793a2068656c6c6f206d65736820236d6573686d6f6e646179", "#weeklynet")
 	if !ok {
 		t.Fatal("expected extraction success")
 	}
@@ -15,17 +15,17 @@ func TestExtractFromPayload(t *testing.T) {
 	}
 }
 
-func TestExtractFromPayloadRequiresMeshMondayTag(t *testing.T) {
-	_, ok := ExtractFromPayload("41766572793a2068656c6c6f206d657368")
+func TestExtractFromPayloadRequiresWeeklyNetTag(t *testing.T) {
+	_, ok := ExtractFromPayload("41766572793a2068656c6c6f206d657368", "#weeklynet")
 	if ok {
-		t.Fatal("expected extraction to fail without #meshmonday tag")
+		t.Fatal("expected extraction to fail without #weeklynet tag")
 	}
 }
 
 func TestExtractFromPayloadAllowsUnicodeAndSymbolsInUsername(t *testing.T) {
-	// "TR&RS🎸: Marvelous #MeshMonday!"
+	// "TR&RS🎸: Marvelous #WeeklyNet!"
 	payloadHex := "5452265253f09f8eb83a204d617276656c6f757320234d6573684d6f6e64617921"
-	c, ok := ExtractFromPayload(payloadHex)
+	c, ok := ExtractFromPayload(payloadHex, "#weeklynet")
 	if !ok {
 		t.Fatal("expected extraction success for unicode/symbol sender")
 	}
@@ -51,12 +51,15 @@ func TestDecryptGroupTextPayloadPublicChannelVector(t *testing.T) {
 	}
 }
 
-func TestMondayHelpers(t *testing.T) {
+func TestWeekdayHelpers(t *testing.T) {
 	tm := time.Date(2026, 5, 4, 16, 0, 0, 0, time.UTC)
-	if !IsMondayInTZ(tm, "America/Los_Angeles") {
+	if !IsWeekdayInTZ(tm, "America/Los_Angeles", time.Monday) {
 		t.Fatal("expected monday true")
 	}
-	weekStart := WeekStartMonday(tm, "America/Los_Angeles")
+	if IsWeekdayInTZ(tm, "America/Los_Angeles", time.Tuesday) {
+		t.Fatal("expected tuesday false")
+	}
+	weekStart := WeekStartForWeekday(tm, "America/Los_Angeles", time.Monday)
 	if weekStart.Weekday() != time.Monday {
 		t.Fatalf("expected monday, got %s", weekStart.Weekday())
 	}

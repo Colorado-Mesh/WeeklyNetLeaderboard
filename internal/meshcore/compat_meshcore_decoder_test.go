@@ -100,4 +100,3 @@ func TestTransportCodesDecode(t *testing.T) {
 		t.Fatalf("unexpected parsed body: path=%d payload=%s", packet.PathLen, packet.PayloadHex)
 	}
 }
-

@@ -7,11 +7,11 @@ import (
 	"strings"
 	"time"
 
-	"meshmonday/internal/checkins"
-	"meshmonday/internal/config"
-	"meshmonday/internal/meshcore"
-	"meshmonday/internal/models"
-	"meshmonday/internal/storage"
+	"weeklynet/internal/checkins"
+	"weeklynet/internal/config"
+	"weeklynet/internal/meshcore"
+	"weeklynet/internal/models"
+	"weeklynet/internal/storage"
 )
 
 type Service struct {
@@ -22,13 +22,13 @@ type Service struct {
 }
 
 type RestoreCheckinPacketsResult struct {
-	RawScanned       int
-	Decoded          int
-	CheckinsFound    int
-	MondayCheckins   int
-	LinksInserted    int
-	DecodeErrors     int
-	InsertLinkErrors int
+	RawScanned         int
+	Decoded            int
+	CheckinsFound      int
+	QualifyingCheckins int
+	LinksInserted      int
+	DecodeErrors       int
+	InsertLinkErrors   int
 }
 
 const (
@@ -106,15 +106,15 @@ func (s *Service) HandleMessage(ctx context.Context, topic, payloadHex string, o
 		return
 	}
 
-	candidate, ok := checkins.ExtractFromPacket(packet.PayloadType, packet.PayloadHex, s.channelKeys)
+	candidate, ok := checkins.ExtractFromPacket(packet.PayloadType, packet.PayloadHex, s.channelKeys, s.cfg.CheckInHashtag)
 	if !ok {
 		return
 	}
-	if !checkins.IsMondayInTZ(observedAt, s.cfg.TZ) {
+	if !checkins.IsWeekdayInTZ(observedAt, s.cfg.TZ, s.cfg.DayOfWeek) {
 		return
 	}
 
-	weekStart := checkins.WeekStartMonday(observedAt, s.cfg.TZ)
+	weekStart := checkins.WeekStartForWeekday(observedAt, s.cfg.TZ, s.cfg.DayOfWeek)
 	checkinDate := observedAt.In(weekStart.Location())
 	err = withBusyRetry(ctx, func() error {
 		_, innerErr := s.store.InsertCheckinPacket(ctx, weekStart, candidate.Username, packetHash, time.Now().UTC())
@@ -155,18 +155,18 @@ func (s *Service) RestoreCheckinPacketsFromRaw(ctx context.Context) (RestoreChec
 		}
 		result.Decoded++
 
-		candidate, ok := checkins.ExtractFromPacket(packet.PayloadType, packet.PayloadHex, s.channelKeys)
+		candidate, ok := checkins.ExtractFromPacket(packet.PayloadType, packet.PayloadHex, s.channelKeys, s.cfg.CheckInHashtag)
 		if !ok {
 			return nil
 		}
 		result.CheckinsFound++
 
-		if !checkins.IsMondayInTZ(row.ObservedAt, s.cfg.TZ) {
+		if !checkins.IsWeekdayInTZ(row.ObservedAt, s.cfg.TZ, s.cfg.DayOfWeek) {
 			return nil
 		}
-		result.MondayCheckins++
+		result.QualifyingCheckins++
 
-		weekStart := checkins.WeekStartMonday(row.ObservedAt, s.cfg.TZ)
+		weekStart := checkins.WeekStartForWeekday(row.ObservedAt, s.cfg.TZ, s.cfg.DayOfWeek)
 		inserted, err := s.store.InsertCheckinPacket(ctx, weekStart, candidate.Username, row.PacketHash, now)
 		if err != nil {
 			result.InsertLinkErrors++

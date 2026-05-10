@@ -12,7 +12,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"meshmonday/internal/models"
+	"weeklynet/internal/models"
 )
 
 type SQLiteStore struct {

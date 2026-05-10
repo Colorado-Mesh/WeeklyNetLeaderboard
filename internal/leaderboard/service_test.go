@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"meshmonday/internal/models"
+	"weeklynet/internal/models"
 )
 
 func TestCompute(t *testing.T) {

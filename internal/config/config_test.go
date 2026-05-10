@@ -81,23 +81,35 @@ func TestValidateIngestLimits(t *testing.T) {
 		UIPollSeconds:       15,
 		IATADefault:         "SEA",
 		MQTTTopicTemplate:   "meshcore/+/+/packets",
-		MQTTMaxPayloadBytes: 255,
+		MQTTMaxPayloadBytes: 16384,
 		IngestMaxPacketHex:  8192,
 		IngestMaxObserver:   64,
 	}
-	if err := cfg.Validate(); err == nil {
-		t.Fatal("expected MQTT_MAX_PAYLOAD_BYTES validation to fail")
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected valid config, got %v", err)
 	}
 
-	cfg.MQTTMaxPayloadBytes = 16384
-	cfg.IngestMaxPacketHex = 63
+	cfg.DiceBearStyle = "not a style"
 	if err := cfg.Validate(); err == nil {
-		t.Fatal("expected INGEST_MAX_PACKET_HEX_CHARS validation to fail")
+		t.Fatal("expected invalid DICEBEAR_STYLE to fail validation")
 	}
 
-	cfg.IngestMaxPacketHex = 8192
-	cfg.IngestMaxObserver = 7
+	cfg.DiceBearStyle = "adventurer"
+	cfg.UIPollSeconds = -1
 	if err := cfg.Validate(); err == nil {
-		t.Fatal("expected INGEST_MAX_OBSERVER_KEY_CHARS validation to fail")
+		t.Fatal("expected negative UI_POLL_SECONDS to fail validation")
+	}
+}
+
+func TestParseWeekday(t *testing.T) {
+	got, err := parseWeekday("tuesday")
+	if err != nil {
+		t.Fatalf("expected parse success, got %v", err)
+	}
+	if got != 2 {
+		t.Fatalf("expected tuesday, got %v", got)
+	}
+	if _, err := parseWeekday("funday"); err == nil {
+		t.Fatal("expected invalid weekday to fail")
 	}
 }

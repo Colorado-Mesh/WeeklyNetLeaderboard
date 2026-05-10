@@ -13,11 +13,11 @@ import (
 	"strings"
 	"time"
 
-	"meshmonday/internal/checkins"
-	"meshmonday/internal/config"
-	"meshmonday/internal/leaderboard"
-	"meshmonday/internal/models"
-	"meshmonday/internal/storage"
+	"weeklynet/internal/checkins"
+	"weeklynet/internal/config"
+	"weeklynet/internal/leaderboard"
+	"weeklynet/internal/models"
+	"weeklynet/internal/storage"
 )
 
 type Server struct {
@@ -71,9 +71,6 @@ func configuredHashtagChannels(values []string) []string {
 			channel = "#" + channel
 		}
 		channel = strings.ToLower(channel)
-		if channel == "#meshmonday" {
-			continue
-		}
 		if _, exists := seen[channel]; exists {
 			continue
 		}
@@ -91,7 +88,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/api/checkins", s.handleAPIWeekCheckins)
 	mux.HandleFunc("/api/leaderboard", s.handleAPILeaderboard)
 	mux.HandleFunc("/leaderboard", s.handleLeaderboardPage)
-	mux.HandleFunc("/", s.handleMondayPage)
+	mux.HandleFunc("/", s.handleWeekPage)
 	return loggingMiddleware(securityHeadersMiddleware(mux), s.logger)
 }
 
@@ -109,11 +106,11 @@ func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, http.StatusOK, map[string]string{"status": "ready"})
 }
 
-func (s *Server) handleMondayPage(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleWeekPage(w http.ResponseWriter, r *http.Request) {
 	if !allowReadMethod(w, r) {
 		return
 	}
-	weekStart, err := parseWeekStart(r, s.cfg.TZ)
+	weekStart, err := parseWeekStart(r, s.cfg.TZ, s.cfg.DayOfWeek)
 	if err != nil {
 		http.Error(w, "Invalid week parameter.", http.StatusBadRequest)
 		return
@@ -126,6 +123,8 @@ func (s *Server) handleMondayPage(w http.ResponseWriter, r *http.Request) {
 	}
 	data := struct {
 		WeekStart      string
+		WeekDayName    string
+		CheckInHashtag string
 		MeshName       string
 		ListenChannels []string
 		DiceBearStyle  string
@@ -135,6 +134,8 @@ func (s *Server) handleMondayPage(w http.ResponseWriter, r *http.Request) {
 		Checkins       []models.Checkin
 	}{
 		WeekStart:      weekStart.Format(weekDateLayout),
+		WeekDayName:    s.cfg.DayOfWeekLabel(),
+		CheckInHashtag: s.cfg.CheckInHashtag,
 		MeshName:       s.cfg.MeshName,
 		ListenChannels: configuredHashtagChannels(s.cfg.HashtagChannels),
 		DiceBearStyle:  s.cfg.DiceBearStyle,
@@ -144,7 +145,7 @@ func (s *Server) handleMondayPage(w http.ResponseWriter, r *http.Request) {
 		Checkins:       items,
 	}
 	if err := s.templates.ExecuteTemplate(w, "index.html", data); err != nil {
-		s.logger.Error("render monday page failed", "error", err.Error())
+		s.logger.Error("render week page failed", "error", err.Error())
 		http.Error(w, "Internal server error.", http.StatusInternalServerError)
 	}
 }
@@ -182,7 +183,7 @@ func (s *Server) handleAPIWeekCheckins(w http.ResponseWriter, r *http.Request) {
 	if !allowReadMethod(w, r) {
 		return
 	}
-	weekStart, err := parseWeekStart(r, s.cfg.TZ)
+	weekStart, err := parseWeekStart(r, s.cfg.TZ, s.cfg.DayOfWeek)
 	if err != nil {
 		jsonResponse(w, http.StatusBadRequest, map[string]string{"error": "invalid_week"})
 		return
@@ -255,8 +256,8 @@ func allowReadMethod(w http.ResponseWriter, r *http.Request) bool {
 	return false
 }
 
-func parseWeekStart(r *http.Request, tz string) (time.Time, error) {
-	weekStart := checkins.WeekStartMonday(time.Now(), tz)
+func parseWeekStart(r *http.Request, tz string, target time.Weekday) (time.Time, error) {
+	weekStart := checkins.WeekStartForWeekday(time.Now(), tz, target)
 	raw := strings.TrimSpace(r.URL.Query().Get("week"))
 	if raw == "" {
 		return weekStart, nil

@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"meshmonday/internal/config"
-	"meshmonday/internal/storage"
+	"weeklynet/internal/config"
+	"weeklynet/internal/storage"
 
 	_ "modernc.org/sqlite"
 )
@@ -27,9 +27,11 @@ func TestIntegrationIngestDedupeAndMondayCheckin(t *testing.T) {
 	defer store.Close()
 
 	cfg := config.Config{
-		IATADefault:   "SEA",
-		TZ:            "America/Los_Angeles",
-		TrackFromDate: time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC),
+		IATADefault:    "SEA",
+		TZ:             "America/Los_Angeles",
+		TrackFromDate:  time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC),
+		CheckInHashtag: "#meshmonday",
+		DayOfWeek:      time.Monday,
 	}
 
 	svc := NewService(cfg, store, slog.Default())
@@ -64,9 +66,11 @@ func TestIntegrationObserverAggregationFromEnvelopeOrigin(t *testing.T) {
 	defer store.Close()
 
 	cfg := config.Config{
-		IATADefault:   "SEA",
-		TZ:            "America/Los_Angeles",
-		TrackFromDate: time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC),
+		IATADefault:    "SEA",
+		TZ:             "America/Los_Angeles",
+		TrackFromDate:  time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC),
+		CheckInHashtag: "#weeklynet",
+		DayOfWeek:      time.Monday,
 	}
 	svc := NewService(cfg, store, slog.Default())
 
@@ -109,9 +113,11 @@ func TestIntegrationUsernameDedupWithinWeek(t *testing.T) {
 	defer store.Close()
 
 	cfg := config.Config{
-		IATADefault:   "SEA",
-		TZ:            "America/Los_Angeles",
-		TrackFromDate: time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC),
+		IATADefault:    "SEA",
+		TZ:             "America/Los_Angeles",
+		TrackFromDate:  time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC),
+		CheckInHashtag: "#weeklynet",
+		DayOfWeek:      time.Monday,
 	}
 	svc := NewService(cfg, store, slog.Default())
 
@@ -145,9 +151,11 @@ func TestIntegrationObserverBadgeAggregatesAcrossUserPackets(t *testing.T) {
 	defer store.Close()
 
 	cfg := config.Config{
-		IATADefault:   "SEA",
-		TZ:            "America/Los_Angeles",
-		TrackFromDate: time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC),
+		IATADefault:    "SEA",
+		TZ:             "America/Los_Angeles",
+		TrackFromDate:  time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC),
+		CheckInHashtag: "#weeklynet",
+		DayOfWeek:      time.Monday,
 	}
 	svc := NewService(cfg, store, slog.Default())
 
@@ -187,9 +195,11 @@ func TestIntegrationRestoreCheckinPacketsFromRaw(t *testing.T) {
 	defer store.Close()
 
 	cfg := config.Config{
-		IATADefault:   "SEA",
-		TZ:            "America/Los_Angeles",
-		TrackFromDate: time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC),
+		IATADefault:    "SEA",
+		TZ:             "America/Los_Angeles",
+		TrackFromDate:  time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC),
+		CheckInHashtag: "#weeklynet",
+		DayOfWeek:      time.Monday,
 	}
 	svc := NewService(cfg, store, slog.Default())
 

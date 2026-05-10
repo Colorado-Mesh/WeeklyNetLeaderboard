@@ -10,7 +10,7 @@ import (
 
 	paho "github.com/eclipse/paho.mqtt.golang"
 
-	"meshmonday/internal/config"
+	"weeklynet/internal/config"
 )
 
 type replayLine struct {

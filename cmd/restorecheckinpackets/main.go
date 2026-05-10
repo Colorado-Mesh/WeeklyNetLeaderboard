@@ -5,10 +5,10 @@ import (
 	"os"
 	"time"
 
-	"meshmonday/internal/config"
-	"meshmonday/internal/ingest"
-	"meshmonday/internal/logging"
-	"meshmonday/internal/storage"
+	"weeklynet/internal/config"
+	"weeklynet/internal/ingest"
+	"weeklynet/internal/logging"
+	"weeklynet/internal/storage"
 )
 
 func main() {
@@ -46,7 +46,7 @@ func main() {
 		"raw_scanned", result.RawScanned,
 		"decoded", result.Decoded,
 		"checkins_found", result.CheckinsFound,
-		"monday_checkins", result.MondayCheckins,
+		"qualifying_checkins", result.QualifyingCheckins,
 		"links_inserted", result.LinksInserted,
 		"decode_errors", result.DecodeErrors,
 		"insert_link_errors", result.InsertLinkErrors,

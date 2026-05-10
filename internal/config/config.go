@@ -31,6 +31,8 @@ type Config struct {
 	MQTTMaxPayloadBytes int
 	IngestMaxPacketHex  int
 	IngestMaxObserver   int
+	DayOfWeek           time.Weekday
+	CheckInHashtag      string
 	HashtagChannels     []string
 	PrivateChannelKeys  []string
 	ReplayDelay         time.Duration
@@ -69,6 +71,11 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, fmt.Errorf("parse INGEST_MAX_OBSERVER_KEY_CHARS: %w", err)
 	}
+	dayOfWeek, err := parseWeekday(getEnv("DAY_OF_WEEK", ""))
+	if err != nil {
+		return Config{}, err
+	}
+	checkInHashtag := getEnv("CHECKIN_HASHTAG", "#weeklynet")
 
 	cfg := Config{
 		AppEnv:              getEnv("APP_ENV", "development"),
@@ -80,15 +87,17 @@ func Load() (Config, error) {
 		IATAFilters:         parseIATAFilters(getEnv("IATA_FILTERS", ""), strings.ToUpper(getEnv("IATA_DEFAULT", "SEA"))),
 		TrackFromDate:       trackFrom,
 		TZ:                  getEnv("TZ", "America/Los_Angeles"),
-		SQLitePath:          getEnv("SQLITE_PATH", "./data/meshmonday_dev.db"),
+		SQLitePath:          getEnv("SQLITE_PATH", "./data/weeklynet_dev.db"),
 		MQTTBrokerURL:       getEnv("MQTT_BROKER_URL", "tcp://localhost:1883"),
 		MQTTTopicTemplate:   getEnv("MQTT_TOPIC_TEMPLATE", "meshcore/+/+/packets"),
-		MQTTClientID:        getEnv("MQTT_CLIENT_ID", "meshmonday-dev"),
+		MQTTClientID:        getEnv("MQTT_CLIENT_ID", "weeklynet-dev"),
 		MQTTUsername:        os.Getenv("MQTT_USERNAME"),
 		MQTTPassword:        os.Getenv("MQTT_PASSWORD"),
 		MQTTMaxPayloadBytes: mqttMaxPayloadBytes,
 		IngestMaxPacketHex:  ingestMaxPacketHex,
 		IngestMaxObserver:   ingestMaxObserver,
+		DayOfWeek:           dayOfWeek,
+		CheckInHashtag:      checkInHashtag,
 		HashtagChannels:     parseCSV(getEnv("HASHTAG_CHANNELS", "")),
 		PrivateChannelKeys:  parseCSV(getEnv("PRIVATE_CHANNEL_KEYS", "")),
 		ReplayDelay:         time.Duration(replayDelayMs) * time.Millisecond,
@@ -191,6 +200,10 @@ func (c Config) IATAFilterLabel() string {
 	return strings.Join(c.IATAFilters, ", ")
 }
 
+func (c Config) DayOfWeekLabel() string {
+	return c.DayOfWeek.String()
+}
+
 func getEnv(key, defaultValue string) string {
 	v := os.Getenv(key)
 	if v == "" {
@@ -250,6 +263,27 @@ func parseIATAFilters(raw, fallback string) []string {
 		out = append(out, iata)
 	}
 	return out
+}
+
+func parseWeekday(raw string) (time.Weekday, error) {
+	switch strings.ToUpper(strings.TrimSpace(raw)) {
+	case "SUNDAY":
+		return time.Sunday, nil
+	case "MONDAY":
+		return time.Monday, nil
+	case "TUESDAY":
+		return time.Tuesday, nil
+	case "WEDNESDAY":
+		return time.Wednesday, nil
+	case "THURSDAY":
+		return time.Thursday, nil
+	case "FRIDAY":
+		return time.Friday, nil
+	case "SATURDAY":
+		return time.Saturday, nil
+	default:
+		return 0, fmt.Errorf("invalid DAY_OF_WEEK %q", raw)
+	}
 }
 
 func isAllIATAValue(value string) bool {

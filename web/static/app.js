@@ -63,7 +63,7 @@ async function refreshMainInPlace() {
   try {
     const response = await fetch(window.location.href, {
       cache: "no-store",
-      headers: { "X-Requested-With": "meshmonday-poll" },
+      headers: { "X-Requested-With": "weeklynet-poll" },
     });
     if (!response.ok) return;
 

@@ -4,7 +4,7 @@ import (
 	"sort"
 	"time"
 
-	"meshmonday/internal/models"
+	"weeklynet/internal/models"
 )
 
 func Compute(checkins []models.Checkin, trackedFrom time.Time) []models.LeaderboardEntry {
@@ -29,7 +29,7 @@ func Compute(checkins []models.Checkin, trackedFrom time.Time) []models.Leaderbo
 
 	results := make([]models.LeaderboardEntry, 0, len(byUser))
 	for username, entry := range byUser {
-		longest, streakStart := longestMondayStreak(entry.weeks)
+		longest, streakStart := longestWeeklyStreak(entry.weeks)
 		results = append(results, models.LeaderboardEntry{
 			Username:        username,
 			DisplayName:     firstNonEmpty(entry.displayName, username),
@@ -52,7 +52,7 @@ func Compute(checkins []models.Checkin, trackedFrom time.Time) []models.Leaderbo
 	return results
 }
 
-func longestMondayStreak(weeks []time.Time) (int, time.Time) {
+func longestWeeklyStreak(weeks []time.Time) (int, time.Time) {
 	if len(weeks) == 0 {
 		return 0, time.Time{}
 	}

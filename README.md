@@ -1,14 +1,14 @@
-# MeshMonday
+# WeeklyNet
 
-Simple web service for MeshCore Monday check-ins.
+Simple web service for MeshCore weekly check-ins.
 
 ## Features
 - MQTT ingestion for `meshcore/+/+/packets` (all IATA regions) with topic metadata extraction per packet
 - MeshCore packet decoding (header/path/payload extraction)
-- Monday check-in board with DiceBear avatars and animated tiles
+- Weekly check-in board with DiceBear avatars and animated tiles
 - Leaderboard with:
   - Most check-ins (tracked from configurable date)
-  - Longest Monday streak (with streak start date)
+  - Longest streak (with streak start date)
 - SQLite storage with WAL mode and dedupe by packet hash
 
 ## Local macOS development (non-Docker)
@@ -48,7 +48,7 @@ Open `http://127.0.0.1:8080`.
 - Seed utility: `cmd/devseed/main.go`
 - SQLite + migrations: `internal/storage/sqlite.go`
 - Decode logic: `internal/meshcore/decode.go`
-- Monday page: `web/templates/index.html`
+- Weekly page: `web/templates/index.html`
 - Leaderboard page: `web/templates/leaderboard.html`
 
 ## Tests
@@ -64,7 +64,7 @@ Open `http://127.0.0.1:8080`.
   - Pull requests to `main`: build-only validation (no push).
   - Pushes to `main` and version tags (`v*`): build and push to GHCR.
 - Image builds are multi-arch for `linux/amd64` and `linux/arm64`.
-- Published image path: `ghcr.io/agessaman/meshmonday`
+- Published image path: `ghcr.io/agessaman/weeklynet`
 
 ### Public deployment recommendations
 - Run behind TLS termination (reverse proxy or load balancer).
@@ -81,4 +81,4 @@ Backup helper: `scripts/backup_sqlite.sh`.
 - This is useful after schema cleanup or if packet-link rows were lost.
 
 Example nightly cron:
-`0 2 * * * cd /opt/meshmonday && ./scripts/backup_sqlite.sh ./data/meshmonday_prod.db ./backups`
+`0 2 * * * cd /opt/weeklynet && ./scripts/backup_sqlite.sh ./data/weeklynet_prod.db ./backups`
