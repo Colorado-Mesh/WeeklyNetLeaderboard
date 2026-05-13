@@ -106,11 +106,14 @@ func (s *Service) HandleMessage(ctx context.Context, topic, payloadHex string, o
 		return
 	}
 
-	candidate, ok := checkins.ExtractFromPacket(packet.PayloadType, packet.PayloadHex, s.channelKeys, s.cfg.CheckInHashtag)
-	if !ok {
+	// Since there's the option to skip hashtag enforcement (every message on day is a valid check-in),
+	// it's more performant to do the day check first before parsing every message just to reject them later.
+	if !checkins.IsWeekdayInTZ(observedAt, s.cfg.TZ, s.cfg.DayOfWeek) {
 		return
 	}
-	if !checkins.IsWeekdayInTZ(observedAt, s.cfg.TZ, s.cfg.DayOfWeek) {
+
+	candidate, ok := checkins.ExtractFromPacket(packet.PayloadType, packet.PayloadHex, s.channelKeys, s.cfg.CheckInHashtag)
+	if !ok {
 		return
 	}
 
@@ -159,7 +162,10 @@ func (s *Service) RestoreCheckinPacketsFromRaw(ctx context.Context) (RestoreChec
 		if !ok {
 			return nil
 		}
-		result.CheckinsFound++
+		if s.cfg.UsingCheckInHashtag() {
+			// Avoid considering every message (pre day check) as a valid check-in when there's no hashtag
+			result.CheckinsFound++
+		}
 
 		if !checkins.IsWeekdayInTZ(row.ObservedAt, s.cfg.TZ, s.cfg.DayOfWeek) {
 			return nil

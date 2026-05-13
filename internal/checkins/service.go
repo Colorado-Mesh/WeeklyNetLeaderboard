@@ -30,7 +30,7 @@ func ExtractFromPacket(payloadType int, payloadHex string, channelKeys []string,
 		if sender, message, ok := decryptGroupTextPayload(payloadHex, channelKeys); ok {
 			message = strings.TrimSpace(message)
 			if sender != "" {
-				if !hasCheckInHashtag(message, hashtag) {
+				if !isValidCheckInMessage(message, hashtag) {
 					return Candidate{}, false
 				}
 				return Candidate{
@@ -58,7 +58,7 @@ func ExtractFromPayload(payloadHex string, hashtag string) (Candidate, bool) {
 	if err := json.Unmarshal(raw, &jsonBody); err == nil {
 		name := stringValue(jsonBody, "username", "sender", "name")
 		message := stringValue(jsonBody, "message", "text", "body")
-		if name != "" && message != "" && hasCheckInHashtag(message, hashtag) {
+		if name != "" && message != "" && isValidCheckInMessage(message, hashtag) {
 			u := normalizeUsername(name)
 			return Candidate{
 				Username:    u,
@@ -127,14 +127,18 @@ func stringValue(body map[string]any, keys ...string) string {
 	return ""
 }
 
-func hasCheckInHashtag(message string, hashtag string) bool {
+func isValidCheckInMessage(message string, hashtag string) bool {
+	if hashtag == "" {
+		// If not enforcing hashtag, then every message is a valid check-in
+		return true
+	}
 	return strings.Contains(strings.ToLower(message), strings.ToLower(hashtag))
 }
 
 func parseCandidateFromText(text string, hashtag string) (Candidate, bool) {
 	display, msg := parseSenderAndMessage(text)
 	if display != "" {
-		if !hasCheckInHashtag(msg, hashtag) {
+		if !isValidCheckInMessage(msg, hashtag) {
 			return Candidate{}, false
 		}
 		return Candidate{

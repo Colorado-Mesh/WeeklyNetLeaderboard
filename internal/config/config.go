@@ -75,7 +75,7 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	checkInHashtag := getEnv("CHECKIN_HASHTAG", "#weeklynet")
+	checkInHashtag := getEnv("CHECKIN_HASHTAG", "")
 
 	cfg := Config{
 		AppEnv:              getEnv("APP_ENV", "development"),
@@ -202,6 +202,10 @@ func (c Config) IATAFilterLabel() string {
 
 func (c Config) DayOfWeekLabel() string {
 	return c.DayOfWeek.String()
+}
+
+func (c Config) UsingCheckInHashtag() bool {
+	return c.CheckInHashtag != ""
 }
 
 func getEnv(key, defaultValue string) string {
