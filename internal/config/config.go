@@ -37,6 +37,8 @@ type Config struct {
 	PrivateChannelKeys  []string
 	ReplayDelay         time.Duration
 	EnableDevSeed       bool
+	RawRetainWeeks      int
+	RetentionInterval   time.Duration
 }
 
 const dateOnlyFormat = "2006-01-02"
@@ -45,8 +47,14 @@ const publicChannelKeyHex = "8b3387e9c5cdea6ac9e5edbaa115cd72"
 var diceBearStyleSlugPattern = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 
 func Load() (Config, error) {
+	tz := getEnv("TZ", "America/Los_Angeles")
+	loc, locErr := time.LoadLocation(tz)
+	if locErr != nil {
+		loc = time.UTC
+	}
+
 	trackFromRaw := getEnv("TRACK_FROM_DATE", "2026-01-05")
-	trackFrom, err := time.Parse(dateOnlyFormat, trackFromRaw)
+	trackFrom, err := time.ParseInLocation(dateOnlyFormat, trackFromRaw, loc)
 	if err != nil {
 		return Config{}, fmt.Errorf("parse TRACK_FROM_DATE: %w", err)
 	}
@@ -76,6 +84,14 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 	checkInHashtag := getEnv("CHECKIN_HASHTAG", "")
+	RawRetainWeeks, err := strconv.Atoi(getEnv("RAW_RETAIN_WEEKS", "12"))
+	if err != nil {
+		return Config{}, fmt.Errorf("parse RAW_RETAIN_WEEKS: %w", err)
+	}
+	retentionIntervalMin, err := strconv.Atoi(getEnv("RETENTION_INTERVAL_MINUTES", "60"))
+	if err != nil {
+		return Config{}, fmt.Errorf("parse RETENTION_INTERVAL_MINUTES: %w", err)
+	}
 
 	cfg := Config{
 		AppEnv:              getEnv("APP_ENV", "development"),
@@ -86,7 +102,7 @@ func Load() (Config, error) {
 		IATADefault:         strings.ToUpper(getEnv("IATA_DEFAULT", "SEA")),
 		IATAFilters:         parseIATAFilters(getEnv("IATA_FILTERS", ""), strings.ToUpper(getEnv("IATA_DEFAULT", "SEA"))),
 		TrackFromDate:       trackFrom,
-		TZ:                  getEnv("TZ", "America/Los_Angeles"),
+		TZ:                  tz,
 		SQLitePath:          getEnv("SQLITE_PATH", "./data/weeklynet_dev.db"),
 		MQTTBrokerURL:       getEnv("MQTT_BROKER_URL", "tcp://localhost:1883"),
 		MQTTTopicTemplate:   getEnv("MQTT_TOPIC_TEMPLATE", "meshcore/+/+/packets"),
@@ -102,6 +118,8 @@ func Load() (Config, error) {
 		PrivateChannelKeys:  parseCSV(getEnv("PRIVATE_CHANNEL_KEYS", "")),
 		ReplayDelay:         time.Duration(replayDelayMs) * time.Millisecond,
 		EnableDevSeed:       parseBool(getEnv("ENABLE_DEV_SEED", "false")),
+		RawRetainWeeks:      RawRetainWeeks,
+		RetentionInterval:   time.Duration(retentionIntervalMin) * time.Minute,
 	}
 
 	if err := cfg.Validate(); err != nil {
@@ -136,6 +154,15 @@ func (c Config) Validate() error {
 	}
 	if c.IngestMaxObserver < 8 {
 		return errors.New("INGEST_MAX_OBSERVER_KEY_CHARS must be >= 8")
+	}
+	if c.RawRetainWeeks < 0 {
+		return errors.New("RAW_RETAIN_WEEKS cannot be negative")
+	}
+	if c.RawRetainWeeks > 1040 {
+		return errors.New("RAW_RETAIN_WEEKS must be <= 1040")
+	}
+	if c.RetentionInterval < time.Minute {
+		return errors.New("RETENTION_INTERVAL_MINUTES must be >= 1")
 	}
 	for _, iata := range c.IATAFilters {
 		if len(iata) < 3 || len(iata) > 4 {

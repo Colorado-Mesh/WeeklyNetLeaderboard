@@ -79,6 +79,20 @@ Backup helper: `scripts/backup_sqlite.sh`.
 - Rebuild `checkin_packets` from `raw_packets` with current parsing/decryption rules:
   - `make restore-checkin-packets`
 - This is useful after schema cleanup or if packet-link rows were lost.
+- Raw packet retention runs inside the server process (`RAW_RETAIN_WEEKS`, `RETENTION_INTERVAL_MINUTES`). Checkins and linked rows are always kept; ambient mesh traffic is trimmed to recent selected weekday in `TZ`.
+- SQLite connections use a 30s `busy_timeout` on every pooled connection so MQTT inserts wait briefly instead of failing while retention deletes run.
+- **`DELETE` does not shrink the `.db` file**: freed pages go on SQLite’s freelist inside the file; the OS sees the same size until you run `VACUUM` (or rebuild). Retention logs `freelist_mib` after each prune so you can see how much space is logically free but still inside the file. The server runs a WAL checkpoint after pruning to trim the `-wal` sidecar when possible.
+- **`raw_packets` vs `packet_observations`**: the first stores each distinct packet payload (large hex blobs). The second stores which observer gateway reported each `(packet_hash, observer)` pair for WeeklyNet check-in observer badges—not duplicate payloads. Both tables shrink when `raw_packets` rows are deleted (FK cascade); the file still needs `VACUUM` to give disk space back.
+- After a large prune, compact on disk: `make vacuum` (uses `SQLITE_PATH` from your env file). Run during a low-traffic window; `VACUUM` needs temporary disk headroom roughly the size of the database.
+
+### Migrating check-ins to a new production database
+Yes. Canonical rows live in `checkins`; those rows foreign-key to `raw_packets(packet_hash)`, and `checkin_packets` / `packet_observations` hang off the same hashes. Export everything needed in FK order:
+
+1. Create the destination database with the **same app version** (run the server once against `SQLITE_PATH`, or apply the same schema), and **stop** the server before importing so nothing else writes the file.
+2. From the old database: `./scripts/export_checkins_bundle.sh ./data/old.db > checkins_bundle.sql`  
+   This pulls `raw_packets` rows referenced by check-ins, all `checkins`, `checkin_packets`, and matching `packet_observations` (for observer badges).
+3. Import: `sqlite3 ./data/new.db < checkins_bundle.sql`
+4. `leaderboard_snapshots` is not exported; the leaderboard API recomputes from `checkins` when loaded. If you added **custom tables** locally (not in this repo), copy those separately.
 
 Example nightly cron:
 `0 2 * * * cd /opt/weeklynet && ./scripts/backup_sqlite.sh ./data/weeklynet_prod.db ./backups`

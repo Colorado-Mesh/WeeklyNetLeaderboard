@@ -1,6 +1,6 @@
-# Installing MeshMonday
+# Installing WeeklyNet
 
-This guide covers running MeshMonday in production using the prebuilt
+This guide covers running WeeklyNet in production using the prebuilt
 multi-arch Docker image published to GHCR, deployed with `docker compose`,
 and fronted by either nginx or Apache as a TLS-terminating reverse proxy.
 
@@ -29,9 +29,9 @@ Pinning to a release tag (e.g. `v1.0.0`) is recommended for production.
 ## 1. Create the deployment directory
 
 ```bash
-sudo mkdir -p /opt/meshmonday/{data,backups}
-sudo chown -R "$USER":"$USER" /opt/meshmonday
-cd /opt/meshmonday
+sudo mkdir -p /opt/weeklynet/{data,backups}
+sudo chown -R "$USER":"$USER" /opt/weeklynet
+cd /opt/weeklynet
 ```
 
 The `data/` directory holds the SQLite database (with WAL files) and
@@ -46,7 +46,7 @@ the app bound to loopback on the host, and persists SQLite data to disk.
 services:
   app:
     image: ghcr.io/agessaman/meshmonday:latest
-    container_name: meshmonday
+    container_name: weeklynet
     env_file:
       - .env
     ports:
@@ -73,7 +73,7 @@ Notes:
 
 ## 3. Create `.env`
 
-Create `/opt/meshmonday/.env` with at minimum the following. Adjust values
+Create `/opt/weeklynet/.env` with at minimum the following. Adjust values
 for your broker, mesh, and timezone.
 
 ```env
@@ -88,12 +88,12 @@ MESH_NAME=CascadiaMesh
 TZ=America/Los_Angeles
 
 # SQLite path inside the container (matches the ./data volume mount)
-SQLITE_PATH=/app/data/meshmonday_prod.db
+SQLITE_PATH=/app/data/weeklynet_prod.db
 
 # MQTT (production REQUIRES username and password)
 MQTT_BROKER_URL=wss://mqtt.example.org:443/mqtt
 MQTT_TOPIC_TEMPLATE=meshcore/+/+/packets
-MQTT_CLIENT_ID=meshmonday-prod
+MQTT_CLIENT_ID=weeklynet-prod
 MQTT_USERNAME=replace-me
 MQTT_PASSWORD=replace-me
 
@@ -138,15 +138,15 @@ below — not both.
 ## 5a. nginx reverse proxy (recommended)
 
 Install nginx if it isn't already, then create
-`/etc/nginx/sites-available/meshmonday.conf` (Debian/Ubuntu layout) or
-`/etc/nginx/conf.d/meshmonday.conf` (RHEL layout):
+`/etc/nginx/sites-available/weeklynet.conf` (Debian/Ubuntu layout) or
+`/etc/nginx/conf.d/weeklynet.conf` (RHEL layout):
 
 ```nginx
 # Redirect plain HTTP to HTTPS.
 server {
     listen 80;
     listen [::]:80;
-    server_name meshmonday.example.org;
+    server_name weeklynet.example.org;
     return 301 https://$host$request_uri;
 }
 
@@ -154,11 +154,11 @@ server {
     listen 443 ssl;
     listen [::]:443 ssl;
     http2 on;
-    server_name meshmonday.example.org;
+    server_name weeklynet.example.org;
 
     # TLS — adjust paths to your certificates (e.g. certbot output).
-    ssl_certificate     /etc/letsencrypt/live/meshmonday.example.org/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/meshmonday.example.org/privkey.pem;
+    ssl_certificate     /etc/letsencrypt/live/weeklynet.example.org/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/weeklynet.example.org/privkey.pem;
     ssl_protocols       TLSv1.2 TLSv1.3;
     ssl_ciphers         HIGH:!aNULL:!MD5;
     ssl_prefer_server_ciphers on;
@@ -192,7 +192,7 @@ Enable and reload:
 
 ```bash
 # Debian/Ubuntu:
-sudo ln -s /etc/nginx/sites-available/meshmonday.conf /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/weeklynet.conf /etc/nginx/sites-enabled/
 sudo nginx -t
 sudo systemctl reload nginx
 ```
@@ -201,7 +201,7 @@ For TLS certificates, [certbot](https://certbot.eff.org/) with the nginx
 plugin is the simplest option:
 
 ```bash
-sudo certbot --nginx -d meshmonday.example.org
+sudo certbot --nginx -d weeklynet.example.org
 ```
 
 ## 5b. Apache reverse proxy
@@ -214,21 +214,21 @@ sudo a2enmod ssl proxy proxy_http headers rewrite
 # RHEL/CentOS/Alma — these are typically loaded by default
 ```
 
-Create `/etc/apache2/sites-available/meshmonday.conf` (Debian/Ubuntu) or
-`/etc/httpd/conf.d/meshmonday.conf` (RHEL):
+Create `/etc/apache2/sites-available/weeklynet.conf` (Debian/Ubuntu) or
+`/etc/httpd/conf.d/weeklynet.conf` (RHEL):
 
 ```apache
 <VirtualHost *:80>
-    ServerName meshmonday.example.org
-    Redirect permanent / https://meshmonday.example.org/
+    ServerName weeklynet.example.org
+    Redirect permanent / https://weeklynet.example.org/
 </VirtualHost>
 
 <VirtualHost *:443>
-    ServerName meshmonday.example.org
+    ServerName weeklynet.example.org
 
     SSLEngine on
-    SSLCertificateFile      /etc/letsencrypt/live/meshmonday.example.org/fullchain.pem
-    SSLCertificateKeyFile   /etc/letsencrypt/live/meshmonday.example.org/privkey.pem
+    SSLCertificateFile      /etc/letsencrypt/live/weeklynet.example.org/fullchain.pem
+    SSLCertificateKeyFile   /etc/letsencrypt/live/weeklynet.example.org/privkey.pem
     SSLProtocol             all -SSLv3 -TLSv1 -TLSv1.1
     SSLHonorCipherOrder     on
 
@@ -244,8 +244,8 @@ Create `/etc/apache2/sites-available/meshmonday.conf` (Debian/Ubuntu) or
 
     ProxyTimeout 30
 
-    ErrorLog  ${APACHE_LOG_DIR}/meshmonday-error.log
-    CustomLog ${APACHE_LOG_DIR}/meshmonday-access.log combined
+    ErrorLog  ${APACHE_LOG_DIR}/weeklynet-error.log
+    CustomLog ${APACHE_LOG_DIR}/weeklynet-access.log combined
 </VirtualHost>
 ```
 
@@ -253,7 +253,7 @@ Enable and reload:
 
 ```bash
 # Debian/Ubuntu
-sudo a2ensite meshmonday.conf
+sudo a2ensite weeklynet.conf
 sudo apachectl configtest
 sudo systemctl reload apache2
 
@@ -265,7 +265,7 @@ sudo systemctl reload httpd
 For TLS certificates with certbot's Apache plugin:
 
 ```bash
-sudo certbot --apache -d meshmonday.example.org
+sudo certbot --apache -d weeklynet.example.org
 ```
 
 ## 6. Verify end-to-end
@@ -273,10 +273,10 @@ sudo certbot --apache -d meshmonday.example.org
 From any client:
 
 ```bash
-curl -fsS https://meshmonday.example.org/healthz
+curl -fsS https://weeklynet.example.org/healthz
 ```
 
-Then open `https://meshmonday.example.org/` in a browser — the Monday
+Then open `https://weeklynet.example.org/` in a browser — the Monday
 check-in board should load, and `/leaderboard` should be reachable.
 
 ## Operations
@@ -284,7 +284,7 @@ check-in board should load, and `/leaderboard` should be reachable.
 ### Upgrades
 
 ```bash
-cd /opt/meshmonday
+cd /opt/weeklynet
 docker compose pull
 docker compose up -d
 docker image prune -f
@@ -299,15 +299,15 @@ The repository ships with `scripts/backup_sqlite.sh`. From the host,
 back up by copying directly out of the bind mount:
 
 ```bash
-cp /opt/meshmonday/data/meshmonday_prod.db \
-   /opt/meshmonday/backups/meshmonday-$(date +%Y%m%d-%H%M%S).db
+cp /opt/weeklynet/data/weeklynet_prod.db \
+   /opt/weeklynet/backups/weeklynet-$(date +%Y%m%d-%H%M%S).db
 ```
 
 Or download the script and run it on a schedule:
 
 ```cron
-0 2 * * * cd /opt/meshmonday && \
-  /opt/meshmonday/backup_sqlite.sh ./data/meshmonday_prod.db ./backups
+0 2 * * * cd /opt/weeklynet && \
+  /opt/weeklynet/backup_sqlite.sh ./data/weeklynet_prod.db ./backups
 ```
 
 ### Logs

@@ -1,11 +1,16 @@
 package config
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestChannelSecretKeysIncludesPublicDerivedAndPrivate(t *testing.T) {
 	cfg := Config{
 		HashtagChannels:    []string{"#bot", "seattle"},
 		PrivateChannelKeys: []string{"00112233445566778899aabbccddeeff"},
+		RawRetainWeeks:     12,
+		RetentionInterval:  time.Hour,
 	}
 	keys := cfg.ChannelSecretKeys()
 
@@ -34,6 +39,8 @@ func TestValidateDiceBearStyle(t *testing.T) {
 		MQTTMaxPayloadBytes: 16384,
 		IngestMaxPacketHex:  8192,
 		IngestMaxObserver:   64,
+		RawRetainWeeks:      12,
+		RetentionInterval:   time.Hour,
 	}
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("expected valid config, got %v", err)
@@ -81,35 +88,57 @@ func TestValidateIngestLimits(t *testing.T) {
 		UIPollSeconds:       15,
 		IATADefault:         "SEA",
 		MQTTTopicTemplate:   "meshcore/+/+/packets",
-		MQTTMaxPayloadBytes: 16384,
+		MQTTMaxPayloadBytes: 255,
 		IngestMaxPacketHex:  8192,
 		IngestMaxObserver:   64,
+		RawRetainWeeks:      12,
+		RetentionInterval:   time.Hour,
 	}
-	if err := cfg.Validate(); err != nil {
-		t.Fatalf("expected valid config, got %v", err)
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected MQTT_MAX_PAYLOAD_BYTES validation to fail")
 	}
 
-	cfg.DiceBearStyle = "not a style"
+	cfg.MQTTMaxPayloadBytes = 16384
+	cfg.IngestMaxPacketHex = 63
 	if err := cfg.Validate(); err == nil {
-		t.Fatal("expected invalid DICEBEAR_STYLE to fail validation")
+		t.Fatal("expected INGEST_MAX_PACKET_HEX_CHARS validation to fail")
 	}
 
-	cfg.DiceBearStyle = "adventurer"
-	cfg.UIPollSeconds = -1
+	cfg.IngestMaxPacketHex = 8192
+	cfg.IngestMaxObserver = 7
 	if err := cfg.Validate(); err == nil {
-		t.Fatal("expected negative UI_POLL_SECONDS to fail validation")
+		t.Fatal("expected INGEST_MAX_OBSERVER_KEY_CHARS validation to fail")
 	}
 }
 
-func TestParseWeekday(t *testing.T) {
-	got, err := parseWeekday("tuesday")
-	if err != nil {
-		t.Fatalf("expected parse success, got %v", err)
+func TestValidateRetentionSettings(t *testing.T) {
+	cfg := Config{
+		MeshName:            "CascadiaMesh",
+		DiceBearStyle:       "rings",
+		UIPollSeconds:       15,
+		IATADefault:         "SEA",
+		MQTTTopicTemplate:   "meshcore/+/+/packets",
+		MQTTMaxPayloadBytes: 16384,
+		IngestMaxPacketHex:  8192,
+		IngestMaxObserver:   64,
+		RawRetainWeeks:      12,
+		RetentionInterval:   time.Hour,
 	}
-	if got != 2 {
-		t.Fatalf("expected tuesday, got %v", got)
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected valid: %v", err)
 	}
-	if _, err := parseWeekday("funday"); err == nil {
-		t.Fatal("expected invalid weekday to fail")
+
+	cfg.RawRetainWeeks = -1
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected negative RAW_RETAIN_WEEKS to fail")
+	}
+	cfg.RawRetainWeeks = 1041
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected excessive RAW_RETAIN_WEEKS to fail")
+	}
+	cfg.RawRetainWeeks = 0
+	cfg.RetentionInterval = 0
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected zero RETENTION_INTERVAL to fail")
 	}
 }

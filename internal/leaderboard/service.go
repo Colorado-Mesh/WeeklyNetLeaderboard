@@ -4,17 +4,24 @@ import (
 	"sort"
 	"time"
 
+	"weeklynet/internal/checkins"
 	"weeklynet/internal/models"
 )
 
-func Compute(checkins []models.Checkin, trackedFrom time.Time) []models.LeaderboardEntry {
+func Compute(checkinRows []models.Checkin, trackedFrom time.Time, now time.Time, tz string, dayOfWeek time.Weekday) []models.LeaderboardEntry {
 	type state struct {
 		displayName string
 		total       int
 		weeks       []time.Time
 	}
+	seasonStart := checkins.WeekStartForWeekday(trackedFrom, tz, dayOfWeek)
+	seasonWeeks := checkins.CountWeeklyNetWeeksInclusive(seasonStart, now, tz, dayOfWeek)
+	if seasonWeeks < 1 {
+		seasonWeeks = 1
+	}
+
 	byUser := make(map[string]*state)
-	for _, c := range checkins {
+	for _, c := range checkinRows {
 		entry, ok := byUser[c.Username]
 		if !ok {
 			entry = &state{displayName: c.DisplayName}
@@ -34,6 +41,7 @@ func Compute(checkins []models.Checkin, trackedFrom time.Time) []models.Leaderbo
 			Username:        username,
 			DisplayName:     firstNonEmpty(entry.displayName, username),
 			MostCheckins:    entry.total,
+			SeasonWeeks:     seasonWeeks,
 			TrackedFrom:     trackedFrom.Format("2006-01-02"),
 			LongestStreak:   longest,
 			StreakStartDate: streakStart.Format("2006-01-02"),
