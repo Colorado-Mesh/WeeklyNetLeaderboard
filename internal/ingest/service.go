@@ -48,6 +48,13 @@ func NewService(cfg config.Config, store *storage.SQLiteStore, logger *slog.Logg
 }
 
 func (s *Service) HandleMessage(ctx context.Context, topic, payloadHex string, observedAt time.Time) {
+	// Since there's the option to skip hashtag enforcement (every message on day is a valid check-in),
+	// it's more performant to do the day check first before parsing every message just to reject them later.
+	if !checkins.IsWeekdayInTZ(observedAt, s.cfg.TZ, s.cfg.DayOfWeek) {
+		s.logger.Info("skipping message processing due to day-of-week guard")
+		return
+	}
+
 	iata, deviceKey, ok := parseTopic(topic)
 	if !ok {
 		s.logger.Warn("invalid topic shape", "topic", topic)
@@ -106,12 +113,6 @@ func (s *Service) HandleMessage(ctx context.Context, topic, payloadHex string, o
 		return
 	}
 
-	// Since there's the option to skip hashtag enforcement (every message on day is a valid check-in),
-	// it's more performant to do the day check first before parsing every message just to reject them later.
-	if !checkins.IsWeekdayInTZ(observedAt, s.cfg.TZ, s.cfg.DayOfWeek) {
-		return
-	}
-
 	candidate, ok := checkins.ExtractFromPacket(packet.PayloadType, packet.PayloadHex, s.channelKeys, s.cfg.CheckInHashtag)
 	if !ok {
 		return
@@ -125,6 +126,7 @@ func (s *Service) HandleMessage(ctx context.Context, topic, payloadHex string, o
 	})
 	if err != nil {
 		s.logger.Error("insert checkin packet link failed", "error", err.Error())
+		return // Don't continue if couldn't store packet
 	}
 	err = withBusyRetry(ctx, func() error {
 		_, innerErr := s.store.InsertCheckin(ctx, models.Checkin{
@@ -141,7 +143,10 @@ func (s *Service) HandleMessage(ctx context.Context, topic, payloadHex string, o
 	})
 	if err != nil {
 		s.logger.Error("insert checkin failed", "error", err.Error())
+		return // Don't continue if couldn't store check-in
 	}
+
+	s.logger.Info("successfully logged packet and check-in", "username", candidate.Username, "displayName", candidate.DisplayName, "message", candidate.Message)
 }
 
 func (s *Service) RestoreCheckinPacketsFromRaw(ctx context.Context) (RestoreCheckinPacketsResult, error) {

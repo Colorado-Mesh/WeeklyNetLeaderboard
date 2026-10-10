@@ -83,6 +83,8 @@ func DecodePacket(payloadHex string) (*Packet, error) {
 	offset++
 
 	payloadVersion := int((header >> 6) & 0x03)
+	// TODO: This is a guard clause, payloadVersion not actually used downstream, but kills processing of payload type and route type (ARE used downstream) if header parsing is going to be wrong?
+	// BUT... Is that actually the case? Or can we just blow right through this clause and still parse the message properly?
 	if payloadVersion != PayloadVersionV1 {
 		return nil, fmt.Errorf("unsupported payload version %d", payloadVersion)
 	}
