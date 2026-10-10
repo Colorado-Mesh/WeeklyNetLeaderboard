@@ -51,7 +51,7 @@ func (s *Service) HandleMessage(ctx context.Context, topic, payloadHex string, o
 	// Since there's the option to skip hashtag enforcement (every message on day is a valid check-in),
 	// it's more performant to do the day check first before parsing every message just to reject them later.
 	if !checkins.IsWeekdayInTZ(observedAt, s.cfg.TZ, s.cfg.DayOfWeek) {
-		s.logger.Info("skipping message processing due to day-of-week guard")
+		s.logger.Debug("skipping message processing due to day-of-week guard")
 		return
 	}
 
